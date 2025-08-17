@@ -1,0 +1,49 @@
+from pymavlink import mavutil
+import time
+
+connection = mavutil.mavlink_connection('COM3', baud=57600)
+connection.wait_heartbeat()
+print(f"Heartbeat from system (system ID {connection.target_system}, component ID {connection.target_component})")
+
+BATTERY_VOLTAGE_THRESHOLD = 10.5  
+BATTERY_REMAINING_THRESHOLD = 20  
+ALTITUDE_MAX_THRESHOLD = 100  
+
+while True:
+    msg = connection.recv_match(blocking=True)
+    
+    if not msg:
+        continue
+
+    msg_type = msg.get_type()
+
+    if msg_type == 'GLOBAL_POSITION_INT':
+        altitude = msg.alt / 1000
+        print(f"Latitude: {msg.lat / 1e7}°")
+        print(f"Longitude: {msg.lon / 1e7}°")
+        print(f"Altitude: {altitude} meters")
+        
+        if altitude > ALTITUDE_MAX_THRESHOLD:
+            print(f"WARNING: Altitude exceeds safe limit! Current Altitude: {altitude} meters")
+
+    elif msg_type == 'SYS_STATUS':
+        voltage = msg.voltage_battery / 1000
+        battery_remaining = msg.battery_remaining
+        print(f"Battery Voltage: {voltage} V")
+        print(f"Battery Remaining: {battery_remaining}%")
+
+        if voltage < BATTERY_VOLTAGE_THRESHOLD:
+            print(f"CRITICAL WARNING: Battery voltage is low! ({voltage} V)")
+
+        if battery_remaining < BATTERY_REMAINING_THRESHOLD:
+            print(f"CRITICAL WARNING: Battery remaining is low! ({battery_remaining}%)")
+
+    elif msg_type == 'ATTITUDE':
+        print(f"Roll: {msg.roll:.2f} rad, Pitch: {msg.pitch:.2f} rad, Yaw: {msg.yaw:.2f} rad")
+
+    elif msg_type == 'HEARTBEAT':
+        mode = mavutil.mode_string_v10(msg)
+        print(f"Flight Mode: {mode}")
+
+    time.sleep(0.5)
+
